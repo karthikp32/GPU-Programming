@@ -83,9 +83,19 @@ public:
 
     // Algorithm:
     // Could divide up the matrices into 256 x 256 tiles, which would be 4 tiles
+    //Could do the dot product of one row-column pair in one thread
+    //Could do the dot product of 1 row with 1024 columns in one block
+    //Could do something in with next 255 rows in 255 other blocks
+    //Could do these in 4 batches with the second batch starting from row 256 to 511
 
-    __global__ void matrix_multiply(int a[1024][1024], int b[1024][1024], int result[1024][1024])
+    __global__ static void MatrixMultiply(int a[1024][1024], int b[1024][1024], int result[1024][1024])
     {
+        //Compute dot product of one row (1 x 1024) and one column (1024 x 1)
+        int rowIdx = blockIdx.x * blockIdx.y; //for ex. block 0 of 256 blocks
+        int colIdx = threadIdx.x * threadIdx.y; //for ex. thread 0 of 1024 threads
+        for (int i=0; i < 1024; i++) {
+            result[rowIdx][colIdx] += (a[0][i] * b[i][0]);
+        }
     }
 };
 
@@ -110,9 +120,12 @@ int main()
     fillMatrix(matA);
     fillMatrix(matB);
 
+    int numBlocks = 200;
+    //32 x 32 = 1024 threads
+    dim3 threadsPerBlock(32, 32);
     // Launch the kernel
-    mat.matrix_multiply<<<dim3(32, 32), dim3(32, 32)>>>(matA, matB, result);
-    cudaDeviceSynchronize();
+    MatrixMultiply<<<numBlocks, threadsPerBlock>>>(matA, matB, result);
+    // cudaDeviceSynchronize();
 
     return 0;
 };
