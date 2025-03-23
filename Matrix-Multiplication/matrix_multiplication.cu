@@ -1,4 +1,5 @@
 #include <iostream>
+#include <stdio.h>
 #include <cuda_runtime.h>
 // The assignment is to implement a distributed matrix multiplication
 // using a tiled method. That is, suppose you have two 1024 by 1024 matrix
@@ -6,9 +7,7 @@
 // you need to split them each of them up into multiple tiles (say 4 by 4),
 // and “combine/distribute” it such a way to do your matrix in parallel.
 
-class MatrixMultiplication
-{
-public:
+
     // To do matrix multiplication, the number of columns in matrix A must
     // match the number of rows in matrix B,
     // Given a matrix A of size 2 x 3 and a matrix B of size 3 x 4,
@@ -88,16 +87,16 @@ public:
     //Could do something in with next 255 rows in 255 other blocks
     //Could do these in 4 batches with the second batch starting from row 256 to 511
 
-    __global__ static void MatrixMultiply(int a[1024][1024], int b[1024][1024], int result[1024][1024])
-    {
+ __global__ void MatrixMultiply(int *a, int *b, int *result, int N)
+{
         //Compute dot product of one row (1 x 1024) and one column (1024 x 1)
         int rowIdx = blockIdx.x * blockIdx.y; //for ex. block 0 of 256 blocks
         int colIdx = threadIdx.x * threadIdx.y; //for ex. thread 0 of 1024 threads
         for (int i=0; i < 1024; i++) {
-            result[rowIdx][colIdx] += (a[0][i] * b[i][0]);
+            result[rowIdx][colIdx] += (a[0][i * 1024 _ ] * b[i][0]);
         }
-    }
-};
+}
+
 
 void fillMatrix(int matrix[1024][1024])
 {
@@ -112,20 +111,43 @@ void fillMatrix(int matrix[1024][1024])
 
 int main()
 {
-    MatrixMultiplication mat;
-    int matA[1024][1024];
-    int matB[1024][1024];
-    int result[1024][1024];
+    int hostMatrixA[1024][1024];
+    int hostMatrixB[1024][1024];
+    int hostMatrixResult[1024][1024];
+    int *deviceMatrixA, *deviceMatrixB, *deviceMatrixResult;
+    size_t size = 1024 * 1024 * sizeof(int);
 
-    fillMatrix(matA);
-    fillMatrix(matB);
+
+    fillMatrix(hostMatrixA);
+    fillMatrix(hostMatrixB);
+    fillMatrix(hostMatrixResult);
+
+    
+    cudaMalloc((void**)&deviceMatrixA, size);
+    cudaMalloc((void**)&deviceMatrixB, size);
+    cudaMalloc((void**)&deviceMatrixResult, size);
+
+    cudaMemcpy(deviceMatrixA, hostMatrixA, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(deviceMatrixB, hostMatrixB, size, cudaMemcpyHostToDevice);
+
 
     int numBlocks = 200;
     //32 x 32 = 1024 threads
     dim3 threadsPerBlock(32, 32);
     // Launch the kernel
-    MatrixMultiply<<<numBlocks, threadsPerBlock>>>(matA, matB, result);
-    // cudaDeviceSynchronize();
+    MatrixMultiply<<<numBlocks, threadsPerBlock>>>(deviceMatrixA, deviceMatrixB, deviceMatrixResult);
+    cudaDeviceSynchronize();
 
+    cudaMemcpy(hostMatrixResult, deviceMatrixResult, size, cudaMemcpyDeviceToHost);
+
+        // ✅ Free allocated memory
+    free(hostMatrixA);
+    free(hostMatrixB);
+    free(hostMatrixResult);
+    
+    cudaFree(deviceMatrixA);
+    cudaFree(deviceMatrixB);
+    cudaFree(deviceMatrixResult);
+    
     return 0;
 };
