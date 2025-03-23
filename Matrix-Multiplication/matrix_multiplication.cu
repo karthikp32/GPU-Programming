@@ -87,14 +87,26 @@
     //Could do something in with next 255 rows in 255 other blocks
     //Could do these in 4 batches with the second batch starting from row 256 to 511
 
+#define TILE_SIZE 1024  // Size of the tile (1024 elements for the row/column)
+
  __global__ void MatrixMultiply(int *a, int *b, int *result, int N)
 {
-        //Compute dot product of one row (1 x 1024) and one column (1024 x 1)
-        int rowIdx = blockIdx.x * blockIdx.y; //for ex. block 0 of 256 blocks
-        int colIdx = threadIdx.x * threadIdx.y; //for ex. thread 0 of 1024 threads
-        for (int i=0; i < 1024; i++) {
-            result[rowIdx][colIdx] += (a[0][i * 1024 _ ] * b[i][0]);
-        }
+        // Declare shared memory for tiles of A and B
+        __shared__ int sharedA[TILE_SIZE];  // Shared memory for one row of A (1x1024)
+        __shared__ int sharedB[TILE_SIZE];  // Shared memory for one column of B (1024x1)
+        __shared__ int sum[1];
+
+        //Get rowIdx to get row from matrix A to use for dot product calculation
+        int rowIdx = blockIdx.y * blockDim.y + threadIdx.y;  // for the row index
+        //Get colIdx to get col from matrix B to use for dot product calculation
+        int colIdx = blockIdx.x * blockDim.x + threadIdx.x;  // for the column index        
+        // Load tiles into shared memory
+        for (int i=0; i < N; i++) {
+        } 
+
+        //Compute dot product of one row (1 x 1024) of matrix A and one column (1024 x 1) of matrix B
+        
+
 }
 
 
@@ -111,6 +123,7 @@ void fillMatrix(int matrix[1024][1024])
 
 int main()
 {
+    int N = 1024;
     int hostMatrixA[1024][1024];
     int hostMatrixB[1024][1024];
     int hostMatrixResult[1024][1024];
@@ -131,20 +144,16 @@ int main()
     cudaMemcpy(deviceMatrixB, hostMatrixB, size, cudaMemcpyHostToDevice);
 
 
-    int numBlocks = 200;
+    dim3 gridDim(256);
     //32 x 32 = 1024 threads
-    dim3 threadsPerBlock(32, 32);
+    dim3 blockDim(32, 32);
     // Launch the kernel
-    MatrixMultiply<<<numBlocks, threadsPerBlock>>>(deviceMatrixA, deviceMatrixB, deviceMatrixResult);
+    MatrixMultiplyKernel<<<gridDim, blockDim>>>(deviceMatrixA, deviceMatrixB, deviceMatrixResult, N);
     cudaDeviceSynchronize();
 
     cudaMemcpy(hostMatrixResult, deviceMatrixResult, size, cudaMemcpyDeviceToHost);
 
         // ✅ Free allocated memory
-    free(hostMatrixA);
-    free(hostMatrixB);
-    free(hostMatrixResult);
-    
     cudaFree(deviceMatrixA);
     cudaFree(deviceMatrixB);
     cudaFree(deviceMatrixResult);
